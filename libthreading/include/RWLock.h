@@ -1,3 +1,9 @@
+/*=============================================================================
+    Copyright (c) 2019 Keelin Becker-Wheeler
+    RWLock.h
+    Distributed under the GNU GENERAL PUBLIC LICENSE
+    See https://github.com/keelimeguy/libthreading
+==============================================================================*/
 #pragma once
 
 #include <cassert>

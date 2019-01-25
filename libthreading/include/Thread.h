@@ -1,12 +1,22 @@
+/*=============================================================================
+    Copyright (c) 2019 Keelin Becker-Wheeler
+    Thread.h
+    Distributed under the GNU GENERAL PUBLIC LICENSE
+    See https://github.com/keelimeguy/libthreading
+==============================================================================*/
 #pragma once
 
 #include <cassert>
 #include <memory>
 #include <pthread.h>
 
+// Macros used basically to hide "void*"-based function header from library user (optional of course)
+// - Also allows abstraction of this library so an API other than
+//   pthreads can be implemented in future (e.g. C++11 threads?)
 #define THREAD_FUNC(func, Ret, Arg) void* func(void* args) { Arg *arg = (Arg*) args;
 #define THREAD_RETURN(ret) pthread_exit((void*)ret); } return nullptr
 #define MAIN_THREAD_RETURN() pthread_exit(nullptr)
+
 
 // WARNING: if a Thread object ever goes out of scope,
 // the constructed argument is deleted and a running
@@ -20,17 +30,18 @@
 template<typename Ret, class Arg>
 class Thread {
 public:
-    Thread(void*(*task)(void*), Arg& arg);
-    Thread(int cpu, void*(*task)(void*), Arg& arg);
+    Thread(void*(*task)(void*), Arg& arg); // Construct given Arg directly
+    Thread(int cpu, void*(*task)(void*), Arg& arg); // (CPU affinity version)
 
+    // Construct given Arg indirectly (using its constructor Args)
     template<typename ... Args>
     Thread(void*(*task)(void*), Args&& ... args);
-
+    // (CPU affinity version)
     template<typename ... Args>
     Thread(int cpu, void*(*task)(void*), Args&& ... args);
 
-    Ret* Join();
-    bool ResultPending();
+    Ret* Join(); // Get return value from thread (waits for thread if not finished)
+    bool ResultPending(); // Is the thread finished with execution? (TryJoin() basically)
 
 private:
     Ret* m_ret;
@@ -38,6 +49,8 @@ private:
     int m_cpu;
     void*(*m_task)(void*);
     pthread_t m_thread;
+
+    // We keep the argument local, so be sure not to destroy Thread object before it finishes
     std::shared_ptr<Arg> m_arg;
 
     void create();
@@ -52,6 +65,8 @@ Thread<Ret,Arg>::Thread(void*(*task)(void*), Arg& arg)
     create();
 }
 
+// Constructs thread from task and argument of necessary input type
+//      while allowing for a specific CPU to be specified
 template<typename Ret, class Arg>
 Thread<Ret,Arg>::Thread(int cpu, void*(*task)(void*), Arg& arg)
     : m_ret(nullptr), m_running(false), m_cpu(cpu), m_task(task)
@@ -61,7 +76,6 @@ Thread<Ret,Arg>::Thread(int cpu, void*(*task)(void*), Arg& arg)
 }
 
 // Constructs thread from task and variable arguments to construct necessary input type
-// knowledge from-> https://stackoverflow.com/questions/40003796/pass-variable-argument-list-to-base-constructor-in-c
 template<typename Ret, class Arg>
 template<typename ... Args>
 Thread<Ret,Arg>::Thread(void*(*task)(void*), Args&& ... args)
@@ -71,6 +85,8 @@ Thread<Ret,Arg>::Thread(void*(*task)(void*), Args&& ... args)
     create();
 }
 
+// Constructs thread from task and variable arguments to construct necessary input type
+//      while allowing for a specific CPU to be specified
 template<typename Ret, class Arg>
 template<typename ... Args>
 Thread<Ret,Arg>::Thread(int cpu, void*(*task)(void*), Args&& ... args)
@@ -120,8 +136,10 @@ Ret* Thread<Ret,Arg>::Join() {
     return m_ret;
 }
 
+// Check if the thread has finished execution
 template<typename Ret, class Arg>
 bool Thread<Ret,Arg>::ResultPending() {
+    // Also stores the return value so it can be checked later
     if (m_running && !pthread_tryjoin_np(m_thread, (void**)(&m_ret))) {
         m_running = false;
         return true;
@@ -129,7 +147,9 @@ bool Thread<Ret,Arg>::ResultPending() {
     return false;
 }
 
-// Specialization for void argument
+// -------------------------------------------------
+// Thread specialization for void argument
+
 template<typename Ret>
 class Thread<Ret,void> {
 public:
